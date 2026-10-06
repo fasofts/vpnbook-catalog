@@ -3,7 +3,14 @@ name: Update VPNBook catalog
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 3 * * *"
+  - cron: "17 0 * * *"
+  - cron: "17 3 * * *"
+  - cron: "17 6 * * *"
+  - cron: "17 9 * * *"
+  - cron: "17 12 * * *"
+  - cron: "17 15 * * *"
+  - cron: "17 18 * * *"
+  - cron: "17 21 * * *"
 
 permissions:
   contents: write

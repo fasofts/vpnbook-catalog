@@ -2,7 +2,9 @@
 import html
 import json
 import re
+import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -13,6 +15,9 @@ API = "https://www.vpnbook.com/api/openvpn"
 OUT = Path("public/servers.json")
 USER = "vpnbook"
 HEADERS = {"User-Agent": "Setup-VPN-VPNBook-Updater/2.0"}
+TIMEOUT = 45
+MAX_ATTEMPTS = 4
+RETRY_DELAY = 2
 COUNTRIES = {
     "us": "United States",
     "ca": "Canada",
@@ -29,9 +34,28 @@ PROTOCOLS = {
 
 
 def get(url):
-    request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return response.read()
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        request = urllib.request.Request(url, headers=HEADERS)
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code != 429 and not 500 <= exc.code < 600:
+                raise
+            error = exc
+        except (urllib.error.URLError, TimeoutError, ssl.SSLError, ConnectionError) as exc:
+            error = exc
+
+        if attempt == MAX_ATTEMPTS:
+            raise error
+
+        delay = RETRY_DELAY * (2 ** (attempt - 1))
+        print(
+            f"Request failed ({attempt}/{MAX_ATTEMPTS}): {url}: {error}. "
+            f"Retrying in {delay}s...",
+            file=sys.stderr,
+        )
+        time.sleep(delay)
 
 
 def plain_html(page):
@@ -87,7 +111,7 @@ def fetch_config(host, protocol):
     url = f"{API}?hostname={urllib.parse.quote(host)}&protocol={protocol}"
     try:
         data = get(url)
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ssl.SSLError, ConnectionError) as exc:
         raise RuntimeError(f"{host} {protocol}: {exc}") from exc
 
     config = data.decode("utf-8", "ignore").strip()
